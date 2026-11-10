@@ -16,6 +16,15 @@
         "questionTypes": ["boolean", "choice", "score"],
         "confidence": "provider-specific"
       }
+    },
+    {
+      "provider": "systemone",
+      "id": "decision-model-preview",
+      "name": "System One (Alibaba Cloud Token Plan decision model)",
+      "capabilities": {
+        "questionTypes": ["boolean", "choice", "score"],
+        "confidence": "provider-specific"
+      }
     }
   ],
   "configContracts": {
