@@ -44,6 +44,19 @@ plugins: { entries: { systemone: { enabled: true, config: {
   baseUrl: "http://10.0.0.5:8080", model: "clef-flash" } } } }
 ```
 
+**Hosted behind a path prefix (Alibaba Cloud Model Studio Token Plan):**
+
+Some hosted System One servers are mounted below a gateway path instead of the host root. Put that
+path in `baseUrl` and the plugin appends `/v1/systemone` to it. The Token Plan decision model is
+selected by its own id, so `model` stays empty and `systemone/decision-model-preview` sends the label:
+
+```json5
+plugins: { entries: { systemone: { enabled: true, config: {
+  baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode",
+  apiKey: { source: "store", provider: "default", id: "QWEN_TOKEN_PLAN_API_KEY" } } } } },
+agents: { defaults: { decisionModel: "systemone/decision-model-preview" } },
+```
+
 **Server that needs a key:**
 
 ```json5
@@ -64,7 +77,7 @@ agents: {
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `baseUrl` | string | required | An `http://` or `https://` origin: host and optional port, nothing else. The plugin calls `<baseUrl>/v1/systemone`. Paths, query strings, fragments and `user:pass@` are rejected. |
+| `baseUrl` | string | required | An `http://` or `https://` origin with an optional path prefix: host, optional port, then any number of `/segment` parts. The plugin calls `<baseUrl>/v1/systemone`. Query strings, fragments, credentials, backslashes, dot segments, spaces and trailing slashes are rejected; a trailing slash on a prefix is normalized away. |
 | `apiKey` | string or SecretRef | none | Sent as `Authorization: Bearer <key>`. A SecretRef (`{ source: env\|file\|exec\|store, provider, id }`) is resolved at gateway startup and hidden in Settings. |
 | `model` | string | none | The model label that `systemone/default` sends. Leave it empty for single-model servers such as Kev. |
 | `timeoutMs` | integer | 30000 | Per-request limit, from 1,000 to 30,000. OpenClaw allows each decision at most 30 seconds, so a model that is slower than that can't be used. Use a smaller `timeoutMs` if you want to fail faster. |

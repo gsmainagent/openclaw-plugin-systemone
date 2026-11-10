@@ -43,6 +43,15 @@ describe("postEvaluation", () => {
     expect((fetchImpl as any).mock.calls[0][0].init.headers.authorization).toBe("Bearer s3cret");
   });
 
+  it("appends /v1/systemone after a configured path prefix, and pins the policy to the origin", async () => {
+    const { fetchImpl } = fake(new Response("{}", { status: 200 }));
+    await call(fetchImpl, { baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode" });
+    const args = (fetchImpl as any).mock.calls[0][0];
+    expect(args.url).toBe("https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/systemone");
+    // The SSRF policy keeps trusting the origin only; the prefix must not widen it.
+    expect(args.policy).toEqual({ allowedOrigins: ["https://token-plan.ap-southeast-1.maas.aliyuncs.com"] });
+  });
+
   it.each([
     [401, "authentication"],
     [403, "authentication"],

@@ -8,6 +8,11 @@ describe("parseBaseUrl", () => {
     ["https://decide.example.com", "https://decide.example.com"],
     ["http://localhost", "http://localhost"],
     ["http://[::1]:8009", "http://[::1]:8009"],
+    ["http://host:8080/v1", "http://host:8080/v1"],
+    ["https://host/path/", "https://host/path"],
+    ["https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode", "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode"],
+    ["http://10.0.0.5:8080/router/v1", "http://10.0.0.5:8080/router/v1"],
+    ["https://host/a.b/c", "https://host/a.b/c"],
   ])("accepts %s", (input, expected) => {
     expect(parseBaseUrl(input)).toBe(expected);
   });
@@ -17,15 +22,22 @@ describe("parseBaseUrl", () => {
   });
 
   it.each([
-    "http://host:8080/v1",
-    "http://host/path",
     "http://user:pass@host",
     "http://host?x=1",
     "http://host#frag",
+    "http://host/a?b=1",
+    "http://host/../etc",
+    "http://host/a/./b",
+    "http://host/a//b",
+    "http://host/a b",
+    "http://host/a\\b",
+    " http://host ",
     "ftp://host",
+    "ftp://host/path",
     "host:8080",
     "",
     `http://${"a".repeat(260)}.com`,
+    `http://host/${"b".repeat(300)}`,
     42,
     undefined,
   ])("rejects %s", (input) => {
@@ -74,7 +86,11 @@ describe("parseSettings", () => {
 
   it("returns undefined without a valid baseUrl", () => {
     expect(parseSettings({})).toBeUndefined();
-    expect(parseSettings({ baseUrl: "http://h/v1" })).toBeUndefined();
+    expect(parseSettings({ baseUrl: "http://h/a/../b" })).toBeUndefined();
     expect(parseSettings(undefined)).toBeUndefined();
+  });
+
+  it("keeps a path prefix through parseSettings", () => {
+    expect(parseSettings({ baseUrl: "https://host/compatible-mode/" })?.baseUrl).toBe("https://host/compatible-mode");
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "openclaw-plugin-systemone",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenClaw decision-model provider for System One servers (Kev, llama.cpp router and others), with a configurable base URL, model label and API key.",
   "repository": { "type": "git", "url": "git+https://github.com/guarismo/openclaw-plugin-systemone.git" },
   "homepage": "https://github.com/guarismo/openclaw-plugin-systemone#readme",
