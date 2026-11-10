@@ -92,6 +92,28 @@ describe("parseWireResponse", () => {
     expect(() => parseWireResponse(v, req)).not.toThrow();
   });
 
+  it("accepts the Alibaba Cloud shape: request_id plus answers without type echoes", () => {
+    const v: any = clone(recorded);
+    v.request_id = "0b1c2d3e-4f56-7f8f-9a0b-1c2d3e4f5a6b";
+    for (const a of Object.values(v.answers)) delete a.type;
+    const r = parseWireResponse(v, req);
+    expect(r.answers.category).toMatchObject({ type: "choice", choice: "phishing" });
+    expect(r.answers.sev).toMatchObject({ type: "score" });
+    expect(r.answers.ph).toEqual({ type: "boolean", probabilityTrue: recorded.answers.ph.noul });
+  });
+
+  it("still refuses a type echo that contradicts its question", () => {
+    const v: any = clone(recorded);
+    v.answers.ph.type = "choice";
+    expect(() => parseWireResponse(v, req)).toThrow(InvalidResponseError);
+  });
+
+  it("refuses a non-string request_id", () => {
+    const v: any = clone(recorded);
+    v.request_id = 42;
+    expect(() => parseWireResponse(v, req)).toThrow(InvalidResponseError);
+  });
+
   it("strips numeric latency_ms and allows missing usage, confidence and legend", () => {
     const v: any = clone(recorded);
     v.latency_ms = 12.5;

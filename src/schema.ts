@@ -63,7 +63,12 @@ function distribution(raw: unknown, labels: string[], where: string): Record<str
 
 function answer(raw: unknown, q: WireQuestion, id: string): DecisionAnswer {
   const where = `answers.${id}`;
-  if (!isObject(raw) || raw.type !== q.type) return fail(`${where} does not match question type ${q.type}`);
+  if (!isObject(raw)) return fail(`${where} is not an object`);
+  // TypeSafe's Jev echoes `type` in every answer, so the original check required it. Alibaba Cloud
+  // Model Studio documents only choice / probabilities / confidence per answer, so a missing echo is
+  // taken from the question it answers (the key already binds them); a present echo that disagrees
+  // with the question is still refused.
+  if (raw.type !== undefined && raw.type !== q.type) return fail(`${where}.type differs from the question type ${q.type}`);
   if (q.type === "noul") {
     onlyKeys(raw, ["type", "noul"], where);
     if (!isProbability(raw.noul)) fail(`${where}.noul is not in [0, 1]`);
@@ -101,7 +106,9 @@ export function parseWireResponse(value: unknown, request: WireRequest): Decisio
     if (typeof latency_ms !== "number" || !Number.isFinite(latency_ms) || latency_ms < 0) fail("latency_ms is invalid");
     body = rest;
   }
-  onlyKeys(body, ["model", "answers", "usage"], "response");
+  // request_id is Alibaba Cloud's per-request trace identifier: informational, never an answer.
+  onlyKeys(body, ["model", "answers", "usage", "request_id"], "response");
+  if (body.request_id !== undefined && typeof body.request_id !== "string") fail("request_id is not a string");
   if (typeof body.model !== "string" || body.model.length === 0 || body.model.length > 256) fail("model is missing");
   if (!isObject(body.answers)) return fail("answers is not an object");
   const ids = Object.keys(request.questions);
