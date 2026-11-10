@@ -98,7 +98,30 @@ function answer(raw: unknown, q: WireQuestion, id: string): DecisionAnswer {
   return { type: "score", score: raw.score as number, probabilities: labels.map((l) => probabilities[l]), ...confidence };
 }
 
-export function parseWireResponse(value: unknown, request: WireRequest): DecisionBatchResult {
+export type ResponseNote = (message: string) => void;
+
+/**
+ * Token accounting is optional host metadata, never a judgment. A vendor block that does not fit
+ * the expected shape is dropped with a note instead of discarding answers that already validated.
+ */
+function normalizeUsage(raw: unknown, note: ResponseNote | undefined): DecisionBatchResult["usage"] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!isObject(raw)) {
+    note?.(`usage dropped: expected an object, got ${Array.isArray(raw) ? "array" : typeof raw}`);
+    return undefined;
+  }
+  const extra = Object.keys(raw).filter((k) => k !== "input_tokens" && k !== "output_tokens");
+  if (extra.length > 0) note?.(`usage fields ignored: ${extra.sort().join(", ")}`);
+  const shape = (v: unknown): string =>
+    v === undefined ? "missing" : typeof v === "number" ? `number(${v})` : Array.isArray(v) ? "array" : typeof v;
+  if (!isCount(raw.input_tokens) || !isCount(raw.output_tokens)) {
+    note?.(`usage dropped: input_tokens=${shape(raw.input_tokens)}, output_tokens=${shape(raw.output_tokens)}`);
+    return undefined;
+  }
+  return { inputTokens: raw.input_tokens as number, outputTokens: raw.output_tokens as number };
+}
+
+export function parseWireResponse(value: unknown, request: WireRequest, note?: ResponseNote): DecisionBatchResult {
   if (!isObject(value)) return fail("not an object");
   let body = value;
   if ("latency_ms" in body) {
@@ -118,11 +141,6 @@ export function parseWireResponse(value: unknown, request: WireRequest): Decisio
   const answers: Record<string, DecisionAnswer> = {};
   for (const id of ids) answers[id] = answer((body.answers as Record<string, unknown>)[id], request.questions[id], id);
   let usage: DecisionBatchResult["usage"];
-  if (body.usage !== undefined) {
-    if (!isObject(body.usage)) return fail("usage is not an object");
-    onlyKeys(body.usage, ["input_tokens", "output_tokens"], "usage");
-    if (!isCount(body.usage.input_tokens) || !isCount(body.usage.output_tokens)) fail("usage counts are invalid");
-    usage = { inputTokens: body.usage.input_tokens as number, outputTokens: body.usage.output_tokens as number };
-  }
+  if (body.usage !== undefined) usage = normalizeUsage(body.usage, note);
   return usage ? { model: body.model as string, answers, usage } : { model: body.model as string, answers };
 }

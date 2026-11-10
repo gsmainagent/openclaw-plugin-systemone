@@ -114,6 +114,31 @@ describe("parseWireResponse", () => {
     expect(() => parseWireResponse(v, req)).toThrow(InvalidResponseError);
   });
 
+  it("keeps validated answers when usage counts are unusable", () => {
+    const v: any = clone(recorded);
+    v.usage = { output_tokens: 3 };
+    const notes: string[] = [];
+    const r = parseWireResponse(v, req, (m) => notes.push(m));
+    expect(r.usage).toBeUndefined();
+    expect(r.answers.category).toMatchObject({ type: "choice", choice: "phishing" });
+    expect(notes.join(" | ")).toContain("input_tokens=missing");
+  });
+
+  it("drops unexpected usage fields with a note instead of failing the batch", () => {
+    const v: any = clone(recorded);
+    v.usage = { input_tokens: 266, output_tokens: 0, total_tokens: 266 };
+    const notes: string[] = [];
+    const r = parseWireResponse(v, req, (m) => notes.push(m));
+    expect(r.usage).toEqual({ inputTokens: 266, outputTokens: 0 });
+    expect(notes.join(" | ")).toContain("usage fields ignored: total_tokens");
+  });
+
+  it("still refuses answers that do not fit the questions", () => {
+    const v: any = clone(recorded);
+    delete v.answers.category.choice;
+    expect(() => parseWireResponse(v, req, () => {})).toThrow(InvalidResponseError);
+  });
+
   it("strips numeric latency_ms and allows missing usage, confidence and legend", () => {
     const v: any = clone(recorded);
     v.latency_ms = 12.5;
@@ -141,12 +166,21 @@ describe("parseWireResponse", () => {
     ["score probabilities keyed wrong", (v) => (v.answers.sev.probabilities = { a: 1, b: 0, c: 0, d: 0, e: 0 })],
     ["legend mismatch", (v) => (v.answers.sev.legend["4"] = "extreme")],
     ["extra answer field", (v) => (v.answers.ph.note = "x")],
-    ["negative usage", (v) => (v.usage.input_tokens = -1)],
     ["empty model", (v) => (v.model = "")],
   ];
   it.each(bad)("rejects %s", (_name, mutate) => {
     const v = clone(recorded);
     mutate(v);
     expect(() => parseWireResponse(_name === "non-object" ? null : v, req)).toThrow(InvalidResponseError);
+  });
+
+  it("drops impossible usage counts instead of discarding the answers", () => {
+    const v: any = clone(recorded);
+    v.usage.input_tokens = -1;
+    const notes: string[] = [];
+    const r = parseWireResponse(v, req, (m) => notes.push(m));
+    expect(r.usage).toBeUndefined();
+    expect(r.answers.ph).toEqual({ type: "boolean", probabilityTrue: 0.9597280497047349 });
+    expect(notes.join(" | ")).toContain("input_tokens=number(-1)");
   });
 });

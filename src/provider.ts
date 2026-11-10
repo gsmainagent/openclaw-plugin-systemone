@@ -60,7 +60,7 @@ export function createProvider(deps: ProviderDeps): DecisionProviderV1 {
           isAdmissible: context.isAdmissible,
         });
         context.signal.throwIfAborted();
-        return { status: "ok", result: parseWireResponse(raw, request) };
+        return { status: "ok", result: parseWireResponse(raw, request, (message) => deps.warn(`${PROVIDER_ID}: ${message}`)) };
       } catch (error) {
         context.signal.throwIfAborted();
         if (error instanceof SystemOneError) return unavailable(error.reason, error.message, error.retryAfterMs);
