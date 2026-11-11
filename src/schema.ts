@@ -101,8 +101,12 @@ function answer(raw: unknown, q: WireQuestion, id: string): DecisionAnswer {
 export type ResponseNote = (message: string) => void;
 
 /**
- * Token accounting is optional host metadata, never a judgment. A vendor block that does not fit
- * the expected shape is dropped with a note instead of discarding answers that already validated.
+ * Token accounting is optional host metadata, never a judgment: nothing here may discard answers
+ * that already validated. Both host fields are optional (`inputTokens?`, `outputTokens?`), so each
+ * counter is kept on its own merits and a vendor that reports only one is normal.
+ *
+ * Alibaba Cloud's Token Plan sends `input_tokens` alone. Jev sends both. A counter that is present
+ * but unusable still gets a note, because that is an adapter gap rather than a vendor choice.
  */
 function normalizeUsage(raw: unknown, note: ResponseNote | undefined): DecisionBatchResult["usage"] | undefined {
   if (raw === undefined || raw === null) return undefined;
@@ -114,11 +118,14 @@ function normalizeUsage(raw: unknown, note: ResponseNote | undefined): DecisionB
   if (extra.length > 0) note?.(`usage fields ignored: ${extra.sort().join(", ")}`);
   const shape = (v: unknown): string =>
     v === undefined ? "missing" : typeof v === "number" ? `number(${v})` : Array.isArray(v) ? "array" : typeof v;
-  if (!isCount(raw.input_tokens) || !isCount(raw.output_tokens)) {
-    note?.(`usage dropped: input_tokens=${shape(raw.input_tokens)}, output_tokens=${shape(raw.output_tokens)}`);
-    return undefined;
-  }
-  return { inputTokens: raw.input_tokens as number, outputTokens: raw.output_tokens as number };
+  const keep = (key: "input_tokens" | "output_tokens", field: "inputTokens" | "outputTokens", usage: { inputTokens?: number; outputTokens?: number }) => {
+    if (isCount(raw[key])) usage[field] = raw[key] as number;
+    else if (Object.hasOwn(raw, key)) note?.(`usage ${key} dropped: ${shape(raw[key])}`);
+  };
+  const usage: { inputTokens?: number; outputTokens?: number } = {};
+  keep("input_tokens", "inputTokens", usage);
+  keep("output_tokens", "outputTokens", usage);
+  return usage.inputTokens === undefined && usage.outputTokens === undefined ? undefined : usage;
 }
 
 export function parseWireResponse(value: unknown, request: WireRequest, note?: ResponseNote): DecisionBatchResult {

@@ -114,14 +114,19 @@ describe("parseWireResponse", () => {
     expect(() => parseWireResponse(v, req)).toThrow(InvalidResponseError);
   });
 
-  it("keeps validated answers when usage counts are unusable", () => {
-    const v: any = clone(recorded);
-    v.usage = { output_tokens: 3 };
-    const notes: string[] = [];
-    const r = parseWireResponse(v, req, (m) => notes.push(m));
-    expect(r.usage).toBeUndefined();
-    expect(r.answers.category).toMatchObject({ type: "choice", choice: "phishing" });
-    expect(notes.join(" | ")).toContain("input_tokens=missing");
+  it("keeps whichever counters the vendor reports, silently", () => {
+    // Alibaba Cloud Token Plan sends input_tokens alone; the host contract makes both optional.
+    const inputOnly: any = clone(recorded);
+    inputOnly.usage = { input_tokens: 202 };
+    const inputNotes: string[] = [];
+    const a = parseWireResponse(inputOnly, req, (m) => inputNotes.push(m));
+    expect(a.usage).toEqual({ inputTokens: 202 });
+    expect(inputNotes).toEqual([]);
+    expect(a.answers.category).toMatchObject({ type: "choice", choice: "phishing" });
+
+    const outputOnly: any = clone(recorded);
+    outputOnly.usage = { output_tokens: 3 };
+    expect(parseWireResponse(outputOnly, req).usage).toEqual({ outputTokens: 3 });
   });
 
   it("drops unexpected usage fields with a note instead of failing the batch", () => {
@@ -174,13 +179,13 @@ describe("parseWireResponse", () => {
     expect(() => parseWireResponse(_name === "non-object" ? null : v, req)).toThrow(InvalidResponseError);
   });
 
-  it("drops impossible usage counts instead of discarding the answers", () => {
+  it("drops an impossible counter but keeps the usable one and the answers", () => {
     const v: any = clone(recorded);
     v.usage.input_tokens = -1;
     const notes: string[] = [];
     const r = parseWireResponse(v, req, (m) => notes.push(m));
-    expect(r.usage).toBeUndefined();
+    expect(r.usage).toEqual({ outputTokens: 0 });
     expect(r.answers.ph).toEqual({ type: "boolean", probabilityTrue: 0.9597280497047349 });
-    expect(notes.join(" | ")).toContain("input_tokens=number(-1)");
+    expect(notes.join(" | ")).toContain("usage input_tokens dropped: number(-1)");
   });
 });
